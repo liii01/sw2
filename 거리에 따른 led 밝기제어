@@ -1,0 +1,47 @@
+#define PIN_LED   9
+#define PIN_TRIG 12
+#define PIN_ECHO 13
+
+long duration;
+float distance;
+
+void setup() {
+  pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_TRIG, OUTPUT);
+  pinMode(PIN_ECHO, INPUT);
+  Serial.begin(57600);
+}
+
+void loop() {
+  digitalWrite(PIN_TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(PIN_TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(PIN_TRIG, LOW);
+
+  duration = pulseIn(PIN_ECHO, HIGH);
+  distance = duration * 0.34 / 2;
+
+  int ledValue = calcBrightness(distance);
+
+  analogWrite(PIN_LED, ledValue);
+
+  Serial.print(distance);
+  Serial.print(",");
+  Serial.println(ledValue);
+
+  delay(100);
+}
+
+int calcBrightness(float d) {
+  if(d <= 100 || d >= 300) return 255;
+  if(d == 150 || d == 250) return 128;
+  if(d == 200) return 0;
+
+  if(d > 100 && d < 200) {
+    return map(d, 100, 200, 255, 0);
+  } else {
+    return map(d, 200, 300, 0, 255);
+  }
+}
+
