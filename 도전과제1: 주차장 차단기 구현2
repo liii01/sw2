@@ -1,0 +1,85 @@
+#include <Servo.h>
+
+#define PIN_SERVO 10
+#define PIN_TRIG 12
+#define PIN_ECHO 13
+
+Servo myServo;
+
+int startAngle = 0;
+int stopAngle  = 90;
+unsigned long MOVING_TIME = 3000;
+#define DIST_THRESHOLD 20  
+
+long duration;
+float distance;
+
+unsigned long moveStartTime;
+int currentStart, currentStop;
+
+enum ServoMode { SIGMOID, EASEINOUT };
+ServoMode mode = SIGMOID;
+
+void setup() {
+  myServo.attach(PIN_SERVO);
+  pinMode(PIN_TRIG, OUTPUT);
+  pinMode(PIN_ECHO, INPUT);
+  Serial.begin(9600);
+
+  myServo.write(startAngle);
+  currentStart = startAngle;
+  currentStop = startAngle;
+  moveStartTime = millis();
+}
+
+int sigmoidAngle(int start, int stop, unsigned long elapsed, unsigned long totalTime) {
+  float t = (float)elapsed / totalTime;
+  if(t > 1) t = 1;
+  float k = 10.0;
+  float s = 1.0 / (1.0 + exp(-k * (t - 0.5)));
+  return start + (stop - start) * s;
+}
+
+int easeInOutAngle(int start, int stop, unsigned long elapsed, unsigned long totalTime) {
+  float t = (float)elapsed / totalTime;
+  if(t > 1) t = 1;
+  float s = 0.5 * (1 - cos(PI * t));
+  return start + (stop - start) * s;
+}
+
+void loop() {
+  digitalWrite(PIN_TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(PIN_TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(PIN_TRIG, LOW);
+
+  duration = pulseIn(PIN_ECHO, HIGH);
+  distance = duration * 0.0343 / 2;
+  Serial.println(distance);
+
+  if (distance <= DIST_THRESHOLD) {
+    if(currentStop != stopAngle){
+      currentStart = myServo.read();
+      currentStop = stopAngle;
+      moveStartTime = millis();
+    }
+  } else {
+    if(currentStop != startAngle){
+      currentStart = myServo.read();
+      currentStop = startAngle;
+      moveStartTime = millis();
+    }
+  }
+
+  unsigned long elapsed = millis() - moveStartTime;
+  int angle;
+  if(mode == SIGMOID){
+    angle = sigmoidAngle(currentStart, currentStop, elapsed, MOVING_TIME);
+  } else {
+    angle = easeInOutAngle(currentStart, currentStop, elapsed, MOVING_TIME);
+  }
+  myServo.write(angle);
+
+  delay(15);
+}
