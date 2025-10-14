@@ -1,0 +1,76 @@
+#include <Servo.h>
+
+#define PIN_SERVO 10
+#define PIN_TRIG 12
+#define PIN_ECHO 13
+
+Servo myServo;
+
+// 서보 각도
+int startAngle = 0;   
+int stopAngle  = 90;  
+
+unsigned long MOVING_TIME = 3000; 
+
+#define DIST_THRESHOLD 20  
+
+long duration;
+float distance;
+
+unsigned long moveStartTime;
+int currentStart, currentStop; // 현재 이동 시작/목표 각도
+
+void setup() {
+  myServo.attach(PIN_SERVO);
+  pinMode(PIN_TRIG, OUTPUT);
+  pinMode(PIN_ECHO, INPUT);
+  Serial.begin(9600);
+
+  myServo.write(startAngle);  // 초기 위치
+  currentStart = startAngle;
+  currentStop = startAngle;
+  moveStartTime = millis();
+}
+
+// 시그모이드 기반 각도 계산
+int sigmoidAngle(int start, int stop, unsigned long elapsed, unsigned long totalTime) {
+  float t = (float)elapsed / totalTime;  // 0 ~ 1
+  if(t > 1) t = 1;                       // 오버플로 방지
+  float k = 10.0;                        // 곡선 steepness
+  float s = 1.0 / (1.0 + exp(-k * (t - 0.5))); // 시그모이드
+  return start + (stop - start) * s;
+}
+
+void loop() {
+  // 1. 초음파 센서로 차량 거리 측정
+  digitalWrite(PIN_TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(PIN_TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(PIN_TRIG, LOW);
+
+  duration = pulseIn(PIN_ECHO, HIGH);
+  distance = duration * 0.0343 / 2;  // cm
+  Serial.println(distance);
+
+  // 차량 감지에 따라 목표 각도 설정
+  if (distance <= DIST_THRESHOLD) {
+    // 차량 접근 → 차단기 올리기
+    if(currentStop != stopAngle){
+      currentStart = myServo.read(); // 현재 위치에서 시작
+      currentStop = stopAngle;
+      moveStartTime = millis();
+    }
+  } else {
+    // 차량 지나감 → 차단기 내리기
+    if(currentStop != startAngle){
+      currentStart = myServo.read(); // 현재 위치에서 시작
+      currentStop = startAngle;
+      moveStartTime = millis();
+    }
+  }
+
+  unsigned long elapsed = millis() - moveStartTime;
+  int angle = sigmoidAngle(currentStart, currentStop, elapsed, MOVING_TIME);
+  myServo.write(angle);
+
