@@ -1,0 +1,90 @@
+const int sensorPin = A0;
+
+#define NUM_POINTS 7
+
+float x[NUM_POINTS];
+float y[NUM_POINTS];
+
+float coef[5];
+
+float readValue() {
+  return analogRead(sensorPin);
+}
+
+int getIntInput(String msg) {
+  Serial.print(msg);
+  while (!Serial.available());
+  int v = Serial.parseInt();
+  while (Serial.available()) Serial.read();
+  return v;
+}
+
+void polyFit(float *x, float *y, int n, int degree) {
+  float X[10] = {0};
+  float B[5]  = {0};
+  float A[5][5] = {0};
+
+  for (int i = 0; i < 2 * degree + 1; i++)
+    for (int j = 0; j < n; j++)
+      X[i] += pow(x[j], i);
+
+  for (int i = 0; i <= degree; i++)
+    for (int j = 0; j <= degree; j++)
+      A[i][j] = X[i + j];
+
+  for (int i = 0; i <= degree; i++)
+    for (int j = 0; j < n; j++)
+      B[i] += pow(x[j], i) * y[j];
+
+  for (int i = 0; i <= degree; i++) {
+    for (int k = i + 1; k <= degree; k++) {
+      float t = A[k][i] / A[i][i];
+      for (int j = 0; j <= degree; j++)
+        A[k][j] -= t * A[i][j];
+      B[k] -= t * B[i];
+    }
+  }
+
+  for (int i = degree; i >= 0; i--) {
+    coef[i] = B[i];
+    for (int j = i + 1; j <= degree; j++)
+      coef[i] -= A[i][j] * coef[j];
+    coef[i] /= A[i][i];
+  }
+}
+
+void setup() {
+  Serial.begin(1000000);
+  delay(1500);
+
+  int degree = 2;
+
+  float dist = 0;
+  for (int i = 0; i < NUM_POINTS; i++) {
+    x[i] = dist;
+    dist += 5;
+  }
+
+  for (int i = 0; i < NUM_POINTS; i++) {
+    Serial.print(x[i], 2);
+    Serial.print(" cm →  press Enter...");
+    while (!Serial.available());
+    while (Serial.available()) Serial.read();
+
+    y[i] = readValue();
+
+    Serial.print("  =>  ");
+    Serial.println(y[i], 0);
+  }
+
+  polyFit(x, y, NUM_POINTS, degree);
+
+  Serial.println();
+  Serial.println("Equation is:");
+  Serial.print("y = ");
+  Serial.print(coef[2], 6); Serial.print(" * X^2 + ");
+  Serial.print(coef[1], 6); Serial.print(" * X + ");
+  Serial.println(coef[0], 6);
+}
+
+void loop() {}
